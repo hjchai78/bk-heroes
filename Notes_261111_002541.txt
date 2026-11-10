@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BK 히어로즈 출석 & MVP 관리 앱</title>
+<style>
+:root {
+--primary: #1e3a8a;
+--secondary: #d97706;
+--bg: #f8fafc;
+--card: #ffffff;
+--text: #1e293b;
+}
+body {
+font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+margin: 0; padding: 0;
+background-color: var(--bg);
+color: var(--text);
+}
+header {
+background-color: var(--primary);
+color: white;
+padding: 16px;
+text-align: center;
+font-weight: bold;
+font-size: 1.2rem;
+box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.container { padding: 16px; max-width: 600px; margin: 0 auto; }
+.card {
+background: var(--card);
+border-radius: 12px;
+padding: 16px;
+margin-bottom: 16px;
+box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.btn {
+background-color: var(--primary);
+color: white;
+border: none;
+padding: 10px 16px;
+border-radius: 8px;
+font-weight: bold;
+cursor: pointer;
+width: 100%;
+}
+.btn-gold { background-color: var(--secondary); }
+.btn-outline {
+background: transparent;
+border: 2px solid var(--primary);
+color: var(--primary);
+}
+.form-group { margin-bottom: 12px; }
+label { display: block; font-weight: bold; margin-bottom: 6px; }
+input, select {
+width: 100%; padding: 10px;
+border: 1px solid #cbd5e1;
+border-radius: 6px; box-sizing: border-box;
+}
+.member-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.member-item {
+border: 1px solid #e2e8f0;
+padding: 10px; border-radius: 8px;
+display: flex; justify-content: space-between; align-items: center;
+background: #fff;
+}
+.member-item.checked {
+background-color: #dbeafe;
+border-color: #3b82f6;
+}
+.badge {
+font-size: 0.8rem; padding: 4px 8px; border-radius: 12px; color: white; background: #94a3b8;
+}
+.badge.active { background: #22c55e; }
+.tab-menu { display: flex; gap: 8px; margin-bottom: 16px; }
+.tab-menu button { flex: 1; }
+table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+th, td { padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0; font-size: 0.9rem; }
+th { background: #f1f5f9; }
+</style>
+</head>
+<body>
+
+<header>
+⚾ BK 히어로즈 출석 & MVP 관리
+</header>
+
+<div class="container">
+<!-- 탭 메뉴 -->
+<div class="tab-menu">
+<button class="btn btn-outline" onclick="switchTab('check')">출석 체크</button>
+<button class="btn btn-outline" onclick="switchTab('ranking')">출석 순위</button>
+</div>
+
+<!-- 관리자 인증 영역 -->
+<div class="card" id="authSection">
+<div style="display: flex; justify-content: space-between; align-items: center;">
+<span id="authStatus">👤 권한: <strong>일반 방문자</strong></span>
+<button class="btn btn-outline" style="width: auto; padding: 4px 12px;" onclick="toggleAuth()">관리자 로그인</button>
+</div>
+</div>
+
+<!-- TAB 1: 출석 및 MVP 기입 (관리자 전용) -->
+<div id="tabCheck">
+<div class="card">
+<h3>📅 일정 및 유형 기입</h3>
+<div class="form-group">
+<label for="eventDate">날짜 선택</label>
+<input type="date" id="eventDate">
+</div>
+<div class="form-group">
+<label for="eventType">일정 구분</label>
+<select id="eventType">
+<option value="연습">⚾ 연습</option>
+<option value="리그">🏆 리그 경기</option>
+</select>
+</div>
+</div>
+
+<div class="card">
+<h3>👥 팀원 출석 체크 (클릭 시 출석/결석 토글)</h3>
+<div class="member-list" id="memberCheckList">
+<!-- JS로 선수 목록 동적 생성 -->
+</div>
+</div>
+
+<div class="card">
+<h3>🌟 오늘의 MVP 선택</h3>
+<select id="mvpSelect">
+<option value="">-- MVP 선택 --</option>
+</select>
+</div>
+
+<button class="btn btn-gold" onclick="saveRecord()">💾 오늘 출석 및 MVP 저장하기</button>
+</div>
+
+<!-- TAB 2: 출석 순위 및 현황 -->
+<div id="tabRanking" style="display: none;">
+<div class="card">
+<h3>🏆 팀원 출석 순위 (Rank)</h3>
+<table>
+<thead>
+<tr>
+<th>순위</th>
+<th>등번호</th>
+<th>이름</th>
+<th>출석일</th>
+<th>출석률</th>
+</tr>
+</thead>
+<tbody id="rankingTableBody">
+<!-- JS로 계산되어 표시됨 -->
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<script>
+// PDF 명단 기반 초기 선수 데이터span_2span_2
+const players = [
+{ no: '00', name: '정동준' }, { no: '23', name: '송우석' }, { no: '28', name: '채희진' },
+{ no: '13', name: '전대한' }, { no: '4', name: '강근철' }, { no: '10', name: '김민철' },
+{ no: '99', name: '최인수' }, { no: '223', name: '박민규' }, { no: '79', name: '정연호' },
+{ no: '22', name: '박철우' }, { no: '21', name: '서완' }, { no: '9', name: '박경호' },
+{ no: '3', name: '이봉운' }, { no: '7', name: '김진영' }, { no: '15', name: '박주찬' },
+{ no: '25', name: '정우일' }, { no: '20', name: '정윤하' }, { no: '6', name: '박진호' },
+{ no: '27', name: '박준태' }, { no: '11', name: '문상현' }, { no: '5', name: '이재석' },
+{ no: '52', name: '임상혁' }
+ ];
+
+let isAdmin = false;
+let records = JSON.parse(localStorage.getItem('bk_records') || '[]');
+let currentAttendance = {};
+
+// 초기화 함수
+window.onload = function() {
+document.getElementById('eventDate').valueAsDate = new Date();
+renderPlayerChecklist();
+updateRanking();
+};
+
+function toggleAuth() {
+if (!isAdmin) {
+const pwd = prompt("관리자 비밀번호를 입력하세요. (초기: 1234)");
+if (pwd === "1234") {
+isAdmin = true;
+document.getElementById('authStatus').innerHTML = "👤 권한: <strong>관리자 (수정 가능)</strong>";
+alert("관리자로 로그인되었습니다.");
+} else {
+alert("비밀번호가 올바르지 않습니다.");
+}
+} else {
+isAdmin = false;
+document.getElementById('authStatus').innerHTML = "👤 권한: <strong>일반 방문자</strong>";
+}
+}
+
+function renderPlayerChecklist() {
+const container = document.getElementById('memberCheckList');
+const mvpSelect = document.getElementById('mvpSelect');
+container.innerHTML = '';
+mvpSelect.innerHTML = '<option value="">-- MVP 선택 --</option>';
+
+players.forEach(p => {
+const isChecked = currentAttendance[p.no] || false;
+
+// 체크리스트 아이템
+const div = document.createElement('div');
+div.className = member-item ${isChecked ? 'checked' : ''}; div.onclick = () =&gt; toggleCheck(p.no); div.innerHTML =
+<div><strong>No.${p.no}&lt;/strong&gt; ${p.name}</div>
+<span class="badge ${isChecked ? 'active' : ''}"&gt;${isChecked ? '출석' : '결석'}</span>
+`;
+container.appendChild(div);
+
+// MVP 옵션
+const opt = document.createElement('option');
+opt.value = p.name;
+opt.textContent = No.${p.no} ${p.name};
+mvpSelect.appendChild(opt);
+});
+}
+
+function toggleCheck(no) {
+if (!isAdmin) {
+alert("출석 체크는 관리자 로그인 후 가능합니다.");
+return;
+}
+currentAttendance[no] = !currentAttendance[no];
+renderPlayerChecklist();
+}
+
+function saveRecord() {
+if (!isAdmin) {
+alert("관리자 권한이 필요합니다.");
+return;
+}
+const date = document.getElementById('eventDate').value;
+const type = document.getElementById('eventType').value;
+const mvp = document.getElementById('mvpSelect').value;
+
+const record = {
+date,
+type,
+attendance: { ...currentAttendance },
+mvp
+};
+
+records.push(record);
+localStorage.setItem('bk_records', JSON.stringify(records));
+alert(``${date} (${type}) 출석 및 MVP 기록이 저장되었습니다.);
+
+// 초기화
+currentAttendance = {};
+renderPlayerChecklist();
+updateRanking();
+}
+
+function updateRanking() {
+const totalEvents = records.length;
+const stats = players.map(p => {
+let count = 0;
+records.forEach(r => {
+if (r.attendance[p.no]) count++;
+});
+const rate = totalEvents > 0 ? ((count / totalEvents) * 100).toFixed(0) : 0;
+return { ...p, count, rate: Number(rate) };
+});
+
+// 출석일 내림차순 정렬
+stats.sort((a, b) => b.count - a.count);
+
+const tbody = document.getElementById('rankingTableBody');
+tbody.innerHTML = '';
+stats.forEach((s, idx) => {
+const tr = document.createElement('tr');
+tr.innerHTML = &lt;td&gt;&lt;strong&gt;${idx + 1}</strong></td>
+<td>No.{s.name}</td>
+<td>{s.rate}%</td>
+`;
+tbody.appendChild(tr);
+});
+}
+
+function switchTab(tabName) {
+document.getElementById('tabCheck').style.display = tabName === 'check' ? 'block' : 'none';
+document.getElementById('tabRanking').style.display = tabName === 'ranking' ? 'block' : 'none';
+}
+</script>
+
+</body>
+</html>
