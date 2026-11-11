@@ -1,382 +1,133 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BK 히어로즈 출석 & MVP 관리 앱</title>
-    <!-- 화면 캡처 전용 라이브러리 추가 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-    <style>
-        :root {
-            --primary: #1e3a8a;
-            --secondary: #d97706;
-            --bg: #f8fafc;
-            --card: #ffffff;
-            --text: #1e293b;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            margin: 0; padding: 0;
-            background-color: var(--bg);
-            color: var(--text);
-        }
-        header {
-            background-color: var(--primary);
-            color: white;
-            padding: 16px;
-            text-align: center;
-            font-weight: bold;
-            font-size: 1.2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-        .card {
-            background: var(--card);
-            border-radius: 12px;
-            padding: 16px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .btn {
-            background-color: var(--primary);
-            color: white;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-        }
-        .btn-gold { background-color: var(--secondary); }
-        .btn-green { background-color: #16a34a; }
-        .btn-outline {
-            background: transparent;
-            border: 2px solid var(--primary);
-            color: var(--primary);
-        }
-        .form-group { margin-bottom: 12px; }
-        label { display: block; font-weight: bold; margin-bottom: 6px; }
-        input, select {
-            width: 100%; padding: 10px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px; box-sizing: border-box;
-        }
-        .member-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
-        .member-item {
-            border: 1px solid #e2e8f0;
-            padding: 10px; border-radius: 8px;
-            display: flex; justify-content: space-between; align-items: center;
-            background: #fff;
-            cursor: pointer;
-        }
-        .member-item.checked {
-            background-color: #dbeafe;
-            border-color: #3b82f6;
-        }
-        .member-item.checked-mvp {
-            background-color: #fef3c7;
-            border-color: #d97706;
-        }
-        .badge {
-            font-size: 0.8rem; padding: 4px 8px; border-radius: 12px; color: white; background: #94a3b8;
-        }
-        .badge.active { background: #22c55e; }
-        .badge.gold { background: #d97706; font-weight: bold; }
-        .tab-menu { display: flex; gap: 8px; margin-bottom: 16px; }
-        .tab-menu button { flex: 1; }
-        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-        th, td { padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; }
-        th { background: #f1f5f9; }
-        .login-box { display: none; margin-top: 10px; }
-        .action-group { display: flex; flex-direction: column; gap: 8px; }
-    </style>
-</head>
-<body>
-
-<header>
-    ⚾ BK 히어로즈 출석 & MVP 관리
-</header>
-
-<div class="container">
-    <!-- 탭 메뉴 -->
-    <div class="tab-menu">
-        <button class="btn btn-outline" onclick="switchTab('check')">출석 체크</button>
-        <button class="btn btn-outline" onclick="switchTab('ranking')">출석 순위</button>
-    </div>
-
-    <!-- 관리자 인증 영역 -->
-    <div class="card" id="authSection">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span id="authStatus">👤 권한: <strong>일반 팀원(열람 전용)</strong></span>
-            <button class="btn btn-outline" id="authBtn" style="width: auto; padding: 6px 14px;" onclick="toggleLoginBox()">관리자 로그인</button>
-        </div>
-        <!-- 로그인 입력 창 -->
-        <div class="login-box" id="loginBox">
-            <div style="display:flex; flex-direction:column; gap: 8px; margin-top: 10px;">
-                <input type="text" id="adminNoInput" placeholder="관리자 등번호 (예: 28 또는 23)">
-                <input type="password" id="adminPwdInput" placeholder="비밀번호 입력 (마스터: 1234)">
-                <button class="btn" onclick="submitLogin()">로그인</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- TAB 1: 출석 및 MVP 기입 -->
-    <div id="tabCheck">
-        <div id="captureAreaCheck">
-            <div class="card">
-                <h3>📅 일정 및 유형 기입</h3>
-                <div class="form-group">
-                    <label for="eventDate">날짜 선택</label>
-                    <input type="date" id="eventDate">
-                </div>
-                <div class="form-group">
-                    <label for="eventType">일정 구분</label>
-                    <select id="eventType">
-                        <option value="연습">⚾ 연습</option>
-                        <option value="리그">🏆 리그 경기</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3>👥 팀원 출석 체크 (클릭 시 출석/결석)</h3>
-                <div class="member-list" id="memberCheckList"></div>
-            </div>
-
-            <div class="card">
-                <h3>🌟 오늘의 MVP 선택 (복수 선택 가능)</h3>
-                <div class="member-list" id="mvpCheckList"></div>
-            </div>
-        </div>
-
-        <div class="action-group">
-            <button class="btn btn-gold" onclick="saveRecord()">💾 오늘 출석 및 MVP 저장하기</button>
-            <button class="btn btn-green" onclick="captureArea('captureAreaCheck', 'BK히어로즈_출석체크')">📸 출석부 화면 이미지 캡처 다운로드</button>
-        </div>
-    </div>
-
-    <!-- TAB 2: 출석 순위 및 현황 -->
-    <div id="tabRanking" style="display: none;">
-        <div class="card" id="captureAreaRanking">
-            <h3>🏆 팀원 출석 및 MVP 순위</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>순위</th>
-                        <th>등번호</th>
-                        <th>이름</th>
-                        <th>출석일</th>
-                        <th>출석률</th>
-                        <th>MVP</th>
-                    </tr>
-                </thead>
-                <tbody id="rankingTableBody"></tbody>
-            </table>
-        </div>
-        <button class="btn btn-green" onclick="captureArea('captureAreaRanking', 'BK히어로즈_출석순위')">📸 순위표 화면 이미지 캡처 다운로드</button>
-    </div>
-</div>
-
-<script>
-    // 선수 명단[span_0](start_span)[span_0](end_span)
-    const players = [
-        { no: '00', name: '정동준' }, { no: '23', name: '송우석' }, { no: '28', name: '채희진' },
-        { no: '13', name: '전대한' }, { no: '4',  name: '강근철' }, { no: '10', name: '김민철' },
-        { no: '99', name: '최인수' }, { no: '223', name: '박민규' }, { no: '79', name: '정연호' },
-        { no: '22', name: '박철우' }, { no: '21', name: '서완' },   { no: '9',  name: '박경호' },
-        { no: '3',  name: '이봉운' }, { no: '7',  name: '김진영' }, { no: '15', name: '박주찬' },
-        { no: '25', name: '정우일' }, { no: '20', name: '정윤하' }, { no: '6',  name: '박진호' },
-        { no: '27', name: '박준태' }, { no: '11', name: '문상현' }, { no: '5',  name: '이재석' },
-        { no: '52', name: '임상혁' }
-    ];
-
-    // 지정 관리자 (등번호 및 개별 비밀번호)
-    const admins = [
-        { no: '28', pwd: '2828' },  // 채희진
-        { no: '223', pwd: '223223' },  // 박민규
-        { no: '13',  pwd: '1313' }   // 전대한
-        { no: '00',  pwd: '0000' }   // 정동준
-    ];
-    let currentAdmin = null;
-    let records = JSON.parse(localStorage.getItem('bk_records') || '[]');
-    let currentAttendance = {};
-    let currentMVPs = {};
-
-    window.onload = function() {
-        document.getElementById('eventDate').valueAsDate = new Date();
-        renderPlayerChecklist();
-        renderMVPChecklist();
-        updateRanking();
-    };
-
-    function toggleLoginBox() {
-        if (currentAdmin) {
-            currentAdmin = null;
-            document.getElementById('authStatus').innerHTML = "👤 권한: <strong>일반 팀원(열람 전용)</strong>";
-            document.getElementById('authBtn').innerText = "관리자 로그인";
-            document.getElementById('loginBox').style.display = "none";
-            alert("로그아웃 되었습니다.");
-        } else {
-            const box = document.getElementById('loginBox');
-            box.style.display = box.style.display === "block" ? "none" : "block";
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BK 히어로즈 출석 &amp; MVP 관리</title>
+  <style>
+    :root {
+      --primary-color: #1b365d;
+      --bg-color: #f4f6f9;
+      --card-bg: #ffffff;
+      --border-color: #e2e8f0;
+      --text-color: #1e293b;
+      --text-muted: #64748b;
     }
 
-    function submitLogin() {
-        const inputNo = document.getElementById('adminNoInput').value.trim();
-        const inputPwd = document.getElementById('adminPwdInput').value.trim();
-
-        if (!inputNo || !inputPwd) {
-            alert("등번호와 비밀번호를 모두 입력해주세요.");
-            return;
-        }
-
-        // 개별 비밀번호 또는 마스터 비밀번호(1234) 검증
-        const matchedAdmin = admins.find(a => String(a.no).trim() === inputNo && String(a.pwd).trim() === inputPwd);
-        
-        if (matchedAdmin || inputPwd === "1234") {
-            const playerInfo = players.find(p => String(p.no).trim() === inputNo);
-            currentAdmin = playerInfo ? playerInfo.name : `No.${inputNo}`;
-            
-            document.getElementById('authStatus').innerHTML = `👤 권한: <strong style="color: #d97706;">${currentAdmin} (관리자)</strong>`;
-            document.getElementById('authBtn').innerText = "로그아웃";
-            document.getElementById('loginBox').style.display = "none";
-            document.getElementById('adminNoInput').value = "";
-            document.getElementById('adminPwdInput').value = "";
-            alert(`${currentAdmin} 관리자님 로그인되었습니다.`);
-            renderPlayerChecklist();
-            renderMVPChecklist();
-        } else {
-            alert("등록된 관리자 등번호 또는 비밀번호가 일치하지 않습니다.\n(마스터 비밀번호: 1234)");
-        }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     }
 
-    function renderPlayerChecklist() {
-        const container = document.getElementById('memberCheckList');
-        if (!container) return;
-        container.innerHTML = '';
-        players.forEach(p => {
-            const isChecked = currentAttendance[p.no] || false;
-            const div = document.createElement('div');
-            div.className = `member-item ${isChecked ? 'checked' : ''}`;
-            div.onclick = () => toggleCheck(p.no);
-            div.innerHTML = `
-                <div><strong>No.${p.no}</strong> ${p.name}</div>
-                <span class="badge ${isChecked ? 'active' : ''}">${isChecked ? '출석' : '결석'}</span>
-            `;
-            container.appendChild(div);
-        });
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      padding-bottom: 40px;
     }
 
-    function renderMVPChecklist() {
-        const container = document.getElementById('mvpCheckList');
-        if (!container) return;
-        container.innerHTML = '';
-        players.forEach(p => {
-            const isChecked = currentMVPs[p.no] || false;
-            const div = document.createElement('div');
-            div.className = `member-item ${isChecked ? 'checked-mvp' : ''}`;
-            div.onclick = () => toggleMVP(p.no);
-            div.innerHTML = `
-                <div><strong>No.${p.no}</strong> ${p.name}</div>
-                <span class="badge ${isChecked ? 'gold' : ''}">${isChecked ? '🌟 MVP' : '선택'}</span>
-            `;
-            container.appendChild(div);
-        });
+    /* 상단 헤더 */
+    .header {
+      background-color: var(--primary-color);
+      color: #fff;
+      text-align: center;
+      padding: 16px 0;
+      font-size: 1.25rem;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    function toggleCheck(no) {
-        if (!currentAdmin) {
-            alert("출석 체크는 관리자로 로그인한 경우에만 가능합니다.");
-            return;
-        }
-        currentAttendance[no] = !currentAttendance[no];
-        renderPlayerChecklist();
+    .container {
+      max-width: 500px;
+      margin: 0 auto;
+      padding: 16px;
     }
 
-    function toggleMVP(no) {
-        if (!currentAdmin) {
-            alert("MVP 선택은 관리자로 로그인한 경우에만 가능합니다.");
-            return;
-        }
-        currentMVPs[no] = !currentMVPs[no];
-        renderMVPChecklist();
+    /* 탭 메뉴 */
+    .tab-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
     }
 
-    function saveRecord() {
-        if (!currentAdmin) {
-            alert("저장 권한이 없습니다. 관리자 로그인을 완료해주세요.");
-            return;
-        }
-        const date = document.getElementById('eventDate').value;
-        const type = document.getElementById('eventType').value;
-        const mvpList = players.filter(p => currentMVPs[p.no]).map(p => p.name);
-
-        const record = { date, type, attendance: { ...currentAttendance }, mvp: mvpList, author: currentAdmin };
-        records.push(record);
-        localStorage.setItem('bk_records', JSON.stringify(records));
-        alert(`${date} (${type}) 출석 및 MVP 저장 완료!`);
-        
-        currentAttendance = {};
-        currentMVPs = {};
-        renderPlayerChecklist();
-        renderMVPChecklist();
-        updateRanking();
+    .tab-btn {
+      flex: 1;
+      padding: 12px;
+      border: 2px solid var(--primary-color);
+      background-color: #fff;
+      color: var(--primary-color);
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
     }
 
-    function updateRanking() {
-        const totalEvents = records.length;
-        const stats = players.map(p => {
-            let count = 0;
-            let mvpCount = 0;
-            records.forEach(r => { 
-                if (r.attendance && r.attendance[p.no]) count++;
-                if (Array.isArray(r.mvp) && r.mvp.includes(p.name)) mvpCount++;
-            });
-            const rate = totalEvents > 0 ? ((count / totalEvents) * 100).toFixed(0) : 0;
-            return { ...p, count, rate: Number(rate), mvpCount };
-        });
-
-        stats.sort((a, b) => b.count - a.count || b.mvpCount - a.mvpCount);
-
-        const tbody = document.getElementById('rankingTableBody');
-        if (!tbody) return;
-        tbody.innerHTML = '';
-        stats.forEach((s, idx) => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td><strong>${idx + 1}</strong></td>
-                <td>No.${s.no}</td>
-                <td>${s.name}</td>
-                <td>${s.count}회</td>
-                <td>${s.rate}%</td>
-                <td>🌟 ${s.mvpCount}회</td>
-            `;
-            tbody.appendChild(tr);
-        });
+    .tab-btn.active {
+      background-color: var(--primary-color);
+      color: #fff;
     }
 
-    function switchTab(tabName) {
-        document.getElementById('tabCheck').style.display = tabName === 'check' ? 'block' : 'none';
-        document.getElementById('tabRanking').style.display = tabName === 'ranking' ? 'block' : 'none';
+    /* 카드 컨테이너 */
+    .card {
+      background: var(--card-bg);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      border: 1px solid var(--border-color);
     }
 
-    // 📸 이미지 캡처 저장 함수
-    function captureArea(elementId, fileName) {
-        const area = document.getElementById(elementId);
-        if (!area) return;
-
-        html2canvas(area, { scale: 2, backgroundColor: "#f8fafc" }).then(canvas => {
-            const link = document.createElement('a');
-            const today = new Date().toISOString().slice(0, 10);
-            link.download = `${fileName}_${today}.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        }).catch(err => {
-            alert("캡처 중 오류가 발생했습니다: " + err.message);
-        });
+    /* 권한 상태 표시바 */
+    .auth-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-</script>
 
-</body>
-</html>
+    .auth-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .btn-outline {
+      padding: 8px 14px;
+      border: 1.5px solid var(--primary-color);
+      background: transparent;
+      color: var(--primary-color);
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+
+    .btn-outline.admin-active {
+      background-color: #ef4444;
+      border-color: #ef4444;
+      color: #fff;
+    }
+
+    /* 입력 폼 */
+    .section-title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .form-group {
+      margin-bottom: 12px;
+    }
+
+    .form-group label {
+      display: block;
