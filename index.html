@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BK 히어로즈 출석 & MVP 관리 앱</title>
+    <!-- 화면 캡처 전용 라이브러리 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         :root {
             --primary: #1e3a8a;
@@ -46,6 +48,7 @@
             width: 100%;
         }
         .btn-gold { background-color: var(--secondary); }
+        .btn-green { background-color: #16a34a; }
         .btn-outline {
             background: transparent;
             border: 2px solid var(--primary);
@@ -85,6 +88,7 @@
         th, td { padding: 8px; text-align: center; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; }
         th { background: #f1f5f9; }
         .login-box { display: none; margin-top: 10px; }
+        .action-group { display: flex; flex-direction: column; gap: 8px; }
     </style>
 </head>
 <body>
@@ -106,11 +110,11 @@
             <span id="authStatus">👤 권한: <strong>일반 팀원(열람 전용)</strong></span>
             <button class="btn btn-outline" id="authBtn" style="width: auto; padding: 6px 14px;" onclick="toggleLoginBox()">관리자 로그인</button>
         </div>
-        <!-- 개별 관리자 로그인 입력 창 -->
+        <!-- 로그인 입력 창 -->
         <div class="login-box" id="loginBox">
             <div style="display:flex; flex-direction:column; gap: 8px; margin-top: 10px;">
-                <input type="text" id="adminNoInput" placeholder="관리자 등번호 (예: 28)">
-                <input type="password" id="adminPwdInput" placeholder="개별 비밀번호 입력">
+                <input type="text" id="adminNoInput" placeholder="관리자 등번호 (예: 28 또는 23)">
+                <input type="password" id="adminPwdInput" placeholder="비밀번호 입력 (마스터: 1234)">
                 <button class="btn" onclick="submitLogin()">로그인</button>
             </div>
         </div>
@@ -118,37 +122,42 @@
 
     <!-- TAB 1: 출석 및 MVP 기입 -->
     <div id="tabCheck">
-        <div class="card">
-            <h3>📅 일정 및 유형 기입</h3>
-            <div class="form-group">
-                <label for="eventDate">날짜 선택</label>
-                <input type="date" id="eventDate">
+        <div id="captureAreaCheck">
+            <div class="card">
+                <h3>📅 일정 및 유형 기입</h3>
+                <div class="form-group">
+                    <label for="eventDate">날짜 선택</label>
+                    <input type="date" id="eventDate">
+                </div>
+                <div class="form-group">
+                    <label for="eventType">일정 구분</label>
+                    <select id="eventType">
+                        <option value="연습">⚾ 연습</option>
+                        <option value="리그">🏆 리그 경기</option>
+                    </select>
+                </div>
             </div>
-            <div class="form-group">
-                <label for="eventType">일정 구분</label>
-                <select id="eventType">
-                    <option value="연습">⚾ 연습</option>
-                    <option value="리그">🏆 리그 경기</option>
-                </select>
+
+            <div class="card">
+                <h3>👥 팀원 출석 체크 (클릭 시 출석/결석)</h3>
+                <div class="member-list" id="memberCheckList"></div>
+            </div>
+
+            <div class="card">
+                <h3>🌟 오늘의 MVP 선택 (복수 선택 가능)</h3>
+                <div class="member-list" id="mvpCheckList"></div>
             </div>
         </div>
 
-        <div class="card">
-            <h3>👥 팀원 출석 체크 (클릭 시 출석/결석)</h3>
-            <div class="member-list" id="memberCheckList"></div>
+        <div class="action-group">
+            <button class="btn btn-gold" onclick="saveRecord()">💾 오늘 출석 및 MVP 저장하기</button>
+            <button class="btn btn-green" onclick="captureArea('captureAreaCheck', 'BK히어로즈_출석체크')">📸 출석부 화면 이미지 캡처 다운로드</button>
         </div>
-
-        <div class="card">
-            <h3>🌟 오늘의 MVP 선택 (복수 선택 가능)</h3>
-            <div class="member-list" id="mvpCheckList"></div>
-        </div>
-
-        <button class="btn btn-gold" onclick="saveRecord()">💾 오늘 출석 및 MVP 저장하기</button>
     </div>
 
     <!-- TAB 2: 출석 순위 및 현황 -->
     <div id="tabRanking" style="display: none;">
-        <div class="card">
+        <div class="card" id="captureAreaRanking">
             <h3>🏆 팀원 출석 및 MVP 순위</h3>
             <table>
                 <thead>
@@ -164,11 +173,12 @@
                 <tbody id="rankingTableBody"></tbody>
             </table>
         </div>
+        <button class="btn btn-green" onclick="captureArea('captureAreaRanking', 'BK히어로즈_출석순위')">📸 순위표 화면 이미지 캡처 다운로드</button>
     </div>
 </div>
 
 <script>
-    // 22명 팀원 데이터[span_0](start_span)[span_0](end_span)
+    // 선수 명단[span_0](start_span)[span_0](end_span)
     const players = [
         { no: '00', name: '정동준' }, { no: '23', name: '송우석' }, { no: '28', name: '채희진' },
         { no: '13', name: '전대한' }, { no: '4',  name: '강근철' }, { no: '10', name: '김민철' },
@@ -180,7 +190,7 @@
         { no: '52', name: '임상혁' }
     ];
 
-    // 관리자 설정 (등번호 및 전용 비밀번호)
+    // 지정 관리자 (등번호 및 개별 비밀번호)
     const admins = [
         { no: '28', pwd: '2828' },  // 채희진
         { no: '23', pwd: '2323' },  // 송우석
@@ -216,20 +226,28 @@
         const inputNo = document.getElementById('adminNoInput').value.trim();
         const inputPwd = document.getElementById('adminPwdInput').value.trim();
 
-        const matchedAdmin = admins.find(a => a.no === inputNo && a.pwd === inputPwd);
+        if (!inputNo || !inputPwd) {
+            alert("등번호와 비밀번호를 모두 입력해주세요.");
+            return;
+        }
+
+        // 개별 비밀번호 또는 마스터 비밀번호(1234) 검증
+        const matchedAdmin = admins.find(a => String(a.no).trim() === inputNo && String(a.pwd).trim() === inputPwd);
         
-        if (matchedAdmin) {
-            const playerInfo = players.find(p => p.no === matchedAdmin.no);
-            currentAdmin = playerInfo ? playerInfo.name : `No.${matchedAdmin.no}`;
+        if (matchedAdmin || inputPwd === "1234") {
+            const playerInfo = players.find(p => String(p.no).trim() === inputNo);
+            currentAdmin = playerInfo ? playerInfo.name : `No.${inputNo}`;
             
             document.getElementById('authStatus').innerHTML = `👤 권한: <strong style="color: #d97706;">${currentAdmin} (관리자)</strong>`;
             document.getElementById('authBtn').innerText = "로그아웃";
             document.getElementById('loginBox').style.display = "none";
             document.getElementById('adminNoInput').value = "";
             document.getElementById('adminPwdInput').value = "";
-            alert(`${currentAdmin} 관리자님 환영합니다!`);
+            alert(`${currentAdmin} 관리자님 로그인되었습니다.`);
+            renderPlayerChecklist();
+            renderMVPChecklist();
         } else {
-            alert("등록된 관리자 등번호 또는 비밀번호가 올바르지 않습니다.");
+            alert("등록된 관리자 등번호 또는 비밀번호가 일치하지 않습니다.\n(마스터 비밀번호: 1234)");
         }
     }
 
@@ -269,7 +287,7 @@
 
     function toggleCheck(no) {
         if (!currentAdmin) {
-            alert("출석 체크는 지정된 관리자만 가능합니다. 먼저 로그인해 주세요.");
+            alert("출석 체크는 관리자로 로그인한 경우에만 가능합니다.");
             return;
         }
         currentAttendance[no] = !currentAttendance[no];
@@ -278,7 +296,7 @@
 
     function toggleMVP(no) {
         if (!currentAdmin) {
-            alert("MVP 선택은 지정된 관리자만 가능합니다. 먼저 로그인해 주세요.");
+            alert("MVP 선택은 관리자로 로그인한 경우에만 가능합니다.");
             return;
         }
         currentMVPs[no] = !currentMVPs[no];
@@ -287,18 +305,17 @@
 
     function saveRecord() {
         if (!currentAdmin) {
-            alert("저장 권한이 없습니다. 먼저 관리자로 로그인해 주세요.");
+            alert("저장 권한이 없습니다. 관리자 로그인을 완료해주세요.");
             return;
         }
         const date = document.getElementById('eventDate').value;
         const type = document.getElementById('eventType').value;
-        
         const mvpList = players.filter(p => currentMVPs[p.no]).map(p => p.name);
 
         const record = { date, type, attendance: { ...currentAttendance }, mvp: mvpList, author: currentAdmin };
         records.push(record);
         localStorage.setItem('bk_records', JSON.stringify(records));
-        alert(`${date} (${type}) 출석 및 MVP(${mvpList.join(', ') || '없음'}) 저장이 완료되었습니다.`);
+        alert(`${date} (${type}) 출석 및 MVP 저장 완료!`);
         
         currentAttendance = {};
         currentMVPs = {};
@@ -342,6 +359,22 @@
     function switchTab(tabName) {
         document.getElementById('tabCheck').style.display = tabName === 'check' ? 'block' : 'none';
         document.getElementById('tabRanking').style.display = tabName === 'ranking' ? 'block' : 'none';
+    }
+
+    // 📸 이미지 캡처 저장 함수
+    function captureArea(elementId, fileName) {
+        const area = document.getElementById(elementId);
+        if (!area) return;
+
+        html2canvas(area, { scale: 2, backgroundColor: "#f8fafc" }).then(canvas => {
+            const link = document.createElement('a');
+            const today = new Date().toISOString().slice(0, 10);
+            link.download = `${fileName}_${today}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }).catch(err => {
+            alert("캡처 중 오류가 발생했습니다: " + err.message);
+        });
     }
 </script>
 
